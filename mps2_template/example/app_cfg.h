@@ -75,7 +75,7 @@
 
 //      <o>The block size <16-65535>
 //      <i>Specifying the block buffer size.
-#define IO_STREAM_BLOCK_BUFFER_ITEM_SIZE    2048
+#define IO_STREAM_BLOCK_BUFFER_ITEM_SIZE    1024
 
 //      <o>The maximum number of telegraphs in telegraph pool <1-65535>
 //      <i>Specifying the telegraph pool size
@@ -102,7 +102,7 @@
 //  <h> NES Simulator Configuration
 //      <o>Maximum ROM Buffer Size in KB <32-512>
 //      <i>A dedicated local buffer is provided to load the NES rom. The minimal size is 32KB
-#define NES_ROM_BUFFER_SIZE                 50
+#define NES_ROM_BUFFER_SIZE                 64
 //      <o>ROM Path
 //      <i>The path of NES rom in host pc.
 //#define NES_ROM_PATH                        "..\\..\\LiteNES\\ROMS\\Super Tank (Battle City Pirate) (J) [p1].nes"

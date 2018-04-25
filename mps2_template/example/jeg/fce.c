@@ -5,11 +5,13 @@
 #include <stdbool.h>
 //#include "app_platform.h"
 #include "hal.h"
+#include "jeg_cfg.h"
 
 #ifndef this
 #   define this        (*ptThis)
 #endif
 
+#define NES_PROFILINE       DISABLED
 
 const pal_t palette[64] = {
 	{ 0x80, 0x80, 0x80 },
@@ -89,24 +91,27 @@ typedef struct {
 } fce_t;
 
 
-NO_INIT static fce_t s_tFCE;
+static NO_INIT fce_t s_tFCE;
 
 
 
 void fce_init(void)
 {
     fce_t *ptThis = &s_tFCE;
-    //memset(&s_tNESConsole, 0, sizeof(nes_t));
-
-    
 
     nes_hal_init();
     
+    memset(&(this.tFrame), 0, sizeof(frame_t));
+    
     this.tFrame.hwHeight = SCREEN_HEIGHT;
     this.tFrame.hwWidth = SCREEN_WIDTH;
-    
+    this.chController[0] = 0;
+    this.chController[1] = 0;
+#if JEG_USE_EXTERNAL_DRAW_PIXEL_INTERFACE == DISABLED
     nes_setup_video(&this.tNESConsole, this.tFrame.chBuffer);
+#endif
 }
+
 
 int32_t fce_load_rom(uint8_t *pchROM, uint_fast32_t wSize)
 {
@@ -115,7 +120,19 @@ int32_t fce_load_rom(uint8_t *pchROM, uint_fast32_t wSize)
         if (NULL == pchROM) {
             break;
         }
+    #if JEG_USE_EXTERNAL_DRAW_PIXEL_INTERFACE == ENABLED
+        {
+            const nes_cfg_t tCFG = {
+                &draw_pixels,
+                &this.tFrame,
+            };
+            if (nes_init(&this.tNESConsole, (nes_cfg_t *)&tCFG)) {
+                break;
+            }
+        }
+    #else
         nes_init(&this.tNESConsole);
+    #endif
         return nes_setup_rom(&this.tNESConsole, pchROM, wSize);
     } while(false);
     
@@ -130,8 +147,28 @@ void fce_run(void)
     fce_t *ptThis = &s_tFCE;
     
     while(true) {
+     
         nes_set_controller(&this.tNESConsole, this.chController[0], this.chController[0]);
+#if NES_PROFILINE == ENABLED
+        start_counter();
+
+        nes_iterate_frame(&this.tNESConsole);
+        int nTimeEmulator = stop_counter();
+        start_counter();
+        update_frame(&this.tFrame);
+        int nTimeRefresh = stop_counter();
+        int nTotal = nTimeEmulator+nTimeRefresh;
+        
+        log_info("NES: %8d %3d \t Refresh: %8d %3d\t %8d %8d ms\r",
+                 nTimeEmulator,
+                (nTimeEmulator * 100 + nTotal / 2)/nTotal,
+                 nTimeRefresh,
+                (nTimeRefresh*100 + nTotal / 2)/nTotal,
+                nTotal,
+                (int32_t)((uint64_t)((uint64_t)nTotal * 1000) / SystemCoreClock));
+#else
         nes_iterate_frame(&this.tNESConsole);
         update_frame(&this.tFrame);
+#endif
     }
 }
