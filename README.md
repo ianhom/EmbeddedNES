@@ -5,7 +5,49 @@ A portable NES simulator for embedded processors.
 
 ## Update Log
 
-- 03-05-2018 PPU refactory
+- 18-05-2018 PPU performance improvement
+
+    * Add buffers for individual sprites
+    
+    * Clean code, remove unused macro switch, i.e. JEG_USE_DIRTY_MATRIX
+
+- 16-05-2018 Add more default roms
+
+    * Add two default roms
+        - ROM1: City Tanks
+        - ROM2: Road Fighter
+        - ROM3: Super Mario Bro
+        - ROM4: Contra (Need implementing new mapper)
+
+- 15-05-2018 Add support for STM32F746G-Discovery
+    
+    * Add dedicated BSP folders for V2M-MPS2 and STM32F746G-Discovery
+    
+    * Add dedicated macro switch to disable FILE-IO 
+        
+        Disable it so you can port and test the NES emulator with default City Tank rom
+
+- 07-05-2008 PPU improvement 
+
+    * Seperate PPU into two versions, one for scanline based and one for partial-scanline based (while another part is pixel based)
+    
+    * Apply compact dual pixels to background buffer
+    
+        TODO: Fix debug mode
+        
+    * Improve the readability
+
+- 05-05-2018 PPU improvement
+    
+    * Add background buffer for name tables.
+    
+    * Add Dirty Matrix to background buffer refreshing scheme. Only changed tile will be updated. 
+    
+    * Add debug mode to show background buffer. 
+    
+    * Gain > 10% performance improvement.
+
+- 03-05-2018 PPU refactory 
 
     * Improve the PPU performance and readabiligy. 
     

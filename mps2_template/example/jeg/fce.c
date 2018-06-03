@@ -1,17 +1,15 @@
 #include "nes.h"
 #include "cpu6502_debug.h"
-#include <string.h>
-#include <stdint.h>
-#include <stdbool.h>
-//#include "app_platform.h"
+
 #include "hal.h"
+#include ".\common.h"
 #include "jeg_cfg.h"
 
 #ifndef this
 #   define this        (*ptThis)
 #endif
 
-#define NES_PROFILINE       DISABLED
+#define NES_PROFILINE       DISABLED 
 
 const pal_t palette[64] = {
 	{ 0x80, 0x80, 0x80 },
@@ -93,7 +91,12 @@ typedef struct {
 
 static NO_INIT fce_t s_tFCE;
 
-
+#if JEG_DEBUG_SHOW_BACKGROUND == ENABLED
+uint_fast8_t debug_fetch_color(uint_fast8_t chColor)
+{
+    return s_tFCE.tNESConsole.ppu.palette[chColor];
+}
+#endif
 
 void fce_init(void)
 {
@@ -109,6 +112,10 @@ void fce_init(void)
     this.chController[1] = 0;
 #if JEG_USE_EXTERNAL_DRAW_PIXEL_INTERFACE == DISABLED
     nes_setup_video(&this.tNESConsole, this.tFrame.chBuffer);
+#endif
+
+#if JEG_DEBUG_SHOW_BACKGROUND == ENABLED
+    this.tFrame.ptBuffer = &(this.tNESConsole.ppu.tNameAttributeTable[JEG_DEBUG_SHOW_NAMETABLE_INDEX].chBackgroundBuffer);
 #endif
 }
 
@@ -134,8 +141,7 @@ int32_t fce_load_rom(uint8_t *pchROM, uint_fast32_t wSize)
         nes_init(&this.tNESConsole);
     #endif
         return nes_setup_rom(&this.tNESConsole, pchROM, wSize);
-    } while(false);
-    
+    } while(false);    
     
     return -1;
 }

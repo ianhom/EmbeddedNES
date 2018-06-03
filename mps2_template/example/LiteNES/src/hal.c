@@ -253,9 +253,33 @@ void update_frame(frame_t *ptFrame)
     uint_fast8_t chX, chY;
     
     for (chY = 0; chY < SCREEN_HEIGHT; chY++) {
-        for (chX = 0; chX < SCREEN_WIDTH; chX++) {
-            //uint_fast8_t y = SCREEN_HEIGHT - chY - 1;
-            s_tScreenBuffer[chY][chX].tColor = s_tColorMap[ptFrame->chPixels[chY][chX]];
+        
+        
+        for (chX = 0; chX < SCREEN_WIDTH; chX ++) {
+            uint_fast8_t y = SCREEN_HEIGHT - chY - 1;
+        
+        
+        #if JEG_DEBUG_SHOW_BACKGROUND == ENABLED 
+        
+            uint_fast32_t wPattern = (*(uint32_t *)&(*(ptFrame->ptBuffer))[chY][chX>>1]);
+            uint_fast8_t n = 8;
+            do {
+                uint_fast8_t chColor = wPattern >> 28;
+                              
+                if ( chColor >= 16 && !(chColor & 0x03)) {
+                    chColor -= 16;
+                }
+                
+                wPattern <<= 4;
+                chColor = debug_fetch_color(chColor);
+                s_tScreenBuffer[y][chX].tColor = s_tColorMap[chColor];
+                chX++;
+            } while(--n);
+            chX--;
+            uint_fast8_t chColor = ptFrame->chPixels[chY][chX];
+            s_tScreenBuffer[y][chX].tColor = s_tColorMap[chColor];
+        #endif
+            
         }
     }
 #endif
@@ -337,7 +361,7 @@ void nes_flip_display(frame_t *ptThis)
             if (!(wMask & (1<<x))) {
                 continue;
             }
-            GLCD_DrawBitmap(((320-SCREEN_WIDTH)>>1) + x * 8, y * 8, 8,8, (uint8_t *)&s_tScreenBuffer[y][x]);
+            GLCD_DrawBitmap(((GLCD_WIDTH-SCREEN_WIDTH)>>1) + x * 8, ((GLCD_HEIGHT-SCREEN_HEIGHT)>>1) + y * 8, 8,8, (uint8_t *)&s_tScreenBuffer[y][x]);
         }
     #endif
         
@@ -347,7 +371,7 @@ void nes_flip_display(frame_t *ptThis)
     
     
     #else
-        GLCD_DrawBitmap((320-SCREEN_WIDTH)>>1,0,SCREEN_WIDTH,SCREEN_HEIGHT, (uint8_t *)s_tScreenBuffer);
+        GLCD_DrawBitmap((GLCD_WIDTH-SCREEN_WIDTH)>>1,((GLCD_HEIGHT-SCREEN_HEIGHT)>>1),SCREEN_WIDTH,SCREEN_HEIGHT, (uint8_t *)s_tScreenBuffer);
     #endif
     //}
 }

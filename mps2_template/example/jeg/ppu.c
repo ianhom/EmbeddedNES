@@ -1,29 +1,38 @@
 #include "ppu.h"
 #include "nes.h"
-#include <stdio.h>
-#include <string.h>
+
+#include "common.h"
 #include "jeg_cfg.h"
 
-#define PPUCTRL_NAMETABLE 3
-#define PPUCTRL_INCREMENT 4
-#define PPUCTRL_SPRITE_TABLE 8
-#define PPUCTRL_BACKGROUND_TABLE 16
-#define PPUCTRL_SPRITE_SIZE 32
-#define PPUCTRL_MASTER_SLAVE 64
-#define PPUCTRL_NMI 128
+//! \name PPU Control Register bit mask
+//! @{
+#define PPUCTRL_NAMETABLE                   (3<<0)
+#define PPUCTRL_INCREMENT                   (1<<2)
+#define PPUCTRL_SPRITE_TABLE                (1<<3)
+#define PPUCTRL_BACKGROUND_TABLE            (1<<4)
+#define PPUCTRL_SPRITE_SIZE                 (1<<5)
+#define PPUCTRL_MASTER_SLAVE                (1<<6)
+#define PPUCTRL_NMI                         (1<<7)
+//! @}
 
-#define PPUMASK_GRAYSCALE 1
-#define PPUMASK_SHOW_LEFT_BACKGROUND 2
-#define PPUMASK_SHOW_LEFT_SPRITES 4
-#define PPUMASK_SHOW_BACKGROUND 8
-#define PPUMASK_SHOW_SPRITES 16
-#define PPUMASK_RED_TINT 32
-#define PPUMASK_GREEN_TINT 64
-#define PPUMASK_BLUE_TINT 128
+//! \name PPU Masking Register Bit Mask
+//! @{
+#define PPUMASK_GRAYSCALE                   (1<<0)
+#define PPUMASK_SHOW_LEFT_BACKGROUND        (1<<1)
+#define PPUMASK_SHOW_LEFT_SPRITES           (1<<2)
+#define PPUMASK_SHOW_BACKGROUND             (1<<3)
+#define PPUMASK_SHOW_SPRITES                (1<<4)
+#define PPUMASK_RED_TINT                    (1<<5)
+#define PPUMASK_GREEN_TINT                  (1<<6)
+#define PPUMASK_BLUE_TINT                   (1<<7)
+//! @}
 
-#define PPUSTATUS_SPRITE_OVERFLOW 32
-#define PPUSTATUS_SPRITE_ZERO_HIT 64
-#define PPUSTATUS_VBLANK 128
+//! \name PPU status register bit mask
+//! @{
+#define PPUSTATUS_SPRITE_OVERFLOW           (1<<5)
+#define PPUSTATUS_SPRITE_ZERO_HIT           (1<<6)
+#define PPUSTATUS_VBLANK                    (1<<7)
+//! @}
 
 #if JEG_USE_EXTERNAL_DRAW_PIXEL_INTERFACE == ENABLED
 bool ppu_init(ppu_t *ppu, ppu_cfg_t *ptCFG) 
@@ -39,17 +48,16 @@ bool ppu_init(ppu_t *ppu, ppu_cfg_t *ptCFG)
             break;
         }
         
-        ppu->nes=ptCFG->ptNES;
-        ppu->read=ptCFG->fnRead;
-        ppu->write=ptCFG->fnWrite;
-        ppu->fnDrawPixel = ptCFG->fnDrawPixel;
-        ppu->ptTag = ptCFG->ptTag;
+        ppu->nes                = ptCFG->ptNES;
+        ppu->read               = ptCFG->fnRead;
+        ppu->write              = ptCFG->fnWrite;
+        ppu->fnDrawPixel        = ptCFG->fnDrawPixel;
+        ppu->ptTag              = ptCFG->ptTag;
     #if JEG_USE_EXTERNAL_DRAW_PIXEL_INTERFACE == DISABLED
-        ppu->video_frame_data = NULL;
+        ppu->video_frame_data   = NULL;
     #endif
         ppu_reset(ppu);
-            
-        
+
         bResult = true;
     } while(false);
     return bResult;
@@ -57,16 +65,16 @@ bool ppu_init(ppu_t *ppu, ppu_cfg_t *ptCFG)
 #else
 void ppu_init(ppu_t *ppu, nes_t *nes, ppu_read_func_t read, ppu_write_func_t write) 
 {
-    ppu->nes=nes;
-    ppu->read=read;
-    ppu->write=write;
-    ppu->video_frame_data = NULL;
+    ppu->nes                = nes;
+    ppu->read               = read;
+    ppu->write              = write;
+    ppu->video_frame_data   = NULL;
     ppu_reset(ppu);
 }
 
 void ppu_setup_video(ppu_t *ppu, uint8_t *video_frame_data) 
 {
-    ppu->video_frame_data=video_frame_data;
+    ppu->video_frame_data = video_frame_data;
 
     memset(ppu->video_frame_data, 0, 256*240);
 }
@@ -75,16 +83,25 @@ void ppu_setup_video(ppu_t *ppu, uint8_t *video_frame_data)
 
 void ppu_reset(ppu_t *ppu) 
 {
-    ppu->last_cycle_number=0;
-    ppu->cycle=340;
-    ppu->scanline=240;
-    ppu->ppuctrl=0;
-    ppu->ppustatus=0;
-    ppu->t=0;
-    ppu->ppumask=0;
-    ppu->oam_address=0;
-    ppu->register_data=0;
-    ppu->name_table_byte=0;
+    ppu->last_cycle_number  = 0;
+    ppu->cycle              = 340;
+    ppu->scanline           = 240;
+    ppu->ppuctrl            = 0;
+    ppu->ppustatus          = 0;
+    ppu->t                  = 0;
+
+    memset(&(ppu->tNameAttributeTable[0]), 0, sizeof(name_attribute_table_t));
+    memset(&(ppu->tNameAttributeTable[1]), 0, sizeof(name_attribute_table_t));
+    
+#if JEG_USE_4_PHYSICAL_NAME_ATTRIBUTE_TABLES == ENABLED
+    memset(&(ppu->tNameAttributeTable[2]), 0, sizeof(name_attribute_table_t));
+    memset(&(ppu->tNameAttributeTable[3]), 0, sizeof(name_attribute_table_t));
+#endif
+
+    ppu->ppumask            = 0;
+    ppu->oam_address        = 0;
+    ppu->register_data      = 0;
+    ppu->name_table_byte    = 0;
     
 #if JEG_USE_EXTERNAL_DRAW_PIXEL_INTERFACE == DISABLED
     if (NULL != ppu->video_frame_data) {
@@ -110,7 +127,7 @@ uint_fast8_t ppu_read(ppu_t *ppu, uint_fast16_t hwAddress)
             break;
             
         case 4:
-            value=ppu->oam_data[ppu->oam_address];
+            value=ppu->tSpriteTable.chBuffer[ppu->oam_address];
             break;
             
         case 7:
@@ -122,7 +139,7 @@ uint_fast8_t ppu_read(ppu_t *ppu, uint_fast16_t hwAddress)
             } else {
                 ppu->buffered_data=ppu->read(ppu->nes, ppu->v - 0x1000);
             }
-            ppu->v+=((ppu->ppuctrl&PPUCTRL_INCREMENT)==0)?1:32;
+            ppu->v+=((ppu->ppuctrl&PPUCTRL_INCREMENT)==0) ? 1 : 32;
             break;
             
         default:
@@ -137,25 +154,58 @@ void ppu_dma_access(ppu_t *ppu, uint_fast8_t chData)
     uint_fast16_t address_temp = chData << 8;
 
 #if JEG_USE_DMA_MEMORY_COPY_ACCELERATION == ENABLED
+
     uint8_t *pchSrc = ppu->nes->cpu.fnDMAGetSourceAddress(ppu->nes, address_temp);
-    memcpy(&(ppu->oam_data[ppu->oam_address]), pchSrc, 256);
+
+    if (0 != ppu->oam_address) {
+        uint_fast16_t hwSize = (256 - ppu->oam_address);
+
+#   if JEG_USE_OPTIMIZED_SPRITE_PROCESSING == ENABLED
+        //! I am lazy, as this is the rare case, make it simple...
+        ppu->bOAMUpdated = true;
+#   endif
+        
+        memcpy(&(ppu->tSpriteTable.chBuffer[ppu->oam_address]), pchSrc, hwSize);
+        pchSrc += hwSize;
+        memcpy(&(ppu->tSpriteTable.chBuffer[0]), pchSrc, ppu->oam_address);
+        
+    } else {
+#   if JEG_USE_OPTIMIZED_SPRITE_PROCESSING == ENABLED
+        uint8_t *pchCheck = pchSrc;
+        uint8_t *pchOAM = ppu->tSpriteTable.chBuffer;
+        uint_fast8_t n = 64;
+        do {
+            if (*pchCheck != *pchOAM) {
+                ppu->bOAMUpdated = true;
+                break;
+            }
+            pchCheck += 4;
+            pchOAM += 4;
+        } while(--n);
+#   endif
+        memcpy(&(ppu->tSpriteTable.chBuffer[0]), pchSrc, 256);
+    }
 #else
     for(uint_fast16_t i=0; i<256; i++) {
         int v=ppu->nes->cpu.read(ppu->nes, address_temp++);
-        ppu->oam_data[ppu->oam_address+i]=v;
+#   if JEG_USE_OPTIMIZED_SPRITE_PROCESSING == ENABLED
+        if (!(i & 0x03)) {
+            if (ppu->tSpriteTable.chBuffer[(ppu->oam_address + i) & 0xFF] != v) {
+                ppu->bOAMUpdated = true;
+            }
+        }
+#   endif
+        ppu->tSpriteTable.chBuffer[(ppu->oam_address + i) & 0xFF]=v;
     }
 #endif
     ppu->nes->cpu.stall_cycles += 513;
     if (ppu->nes->cpu.cycle_number & 0x01) {
         ppu->nes->cpu.stall_cycles++;
     }
-    ppu->bOAMUpdated = true;
 }
 
 void ppu_write(ppu_t *ppu, uint_fast16_t hwAddress, uint_fast8_t chData) 
 {
-    int address_temp;
-
     ppu->register_data = chData;
 
     switch (hwAddress & 7) {
@@ -170,9 +220,15 @@ void ppu_write(ppu_t *ppu, uint_fast16_t hwAddress, uint_fast8_t chData)
             ppu->oam_address=chData;
             break;
         case 4:
-            ppu->oam_data[ppu->oam_address] = chData;
-            ppu->oam_address++;
-            ppu->bOAMUpdated = true;
+        #if JEG_USE_OPTIMIZED_SPRITE_PROCESSING == ENABLED
+            if (!(ppu->oam_address & 0x03)) {
+                uint_fast8_t chOld = ppu->tSpriteTable.chBuffer[ppu->oam_address];
+                if (chOld != chData) {
+                    ppu->bOAMUpdated = true;
+                }
+            }
+        #endif
+            ppu->tSpriteTable.chBuffer[ppu->oam_address++] = chData;
             break;
         case 5:
             ppu_update(ppu);
@@ -204,57 +260,60 @@ void ppu_write(ppu_t *ppu, uint_fast16_t hwAddress, uint_fast8_t chData)
 
 }
 
-uint32_t fetch_sprite_pattern(ppu_t *ppu, int i, int row) 
+static uint32_t fetch_sprite_pattern(ppu_t *ppu, sprite_t *ptSpriteInfo, uint_fast16_t hwRow) 
 {
-    int tile=ppu->oam_data[i*4+1];
-    int attributes=ppu->oam_data[i*4+2];
-    int table;
-    uint16_t address;
+    uint_fast8_t tile = ptSpriteInfo->chIndex;
+    uint_fast8_t chAttributes =  ptSpriteInfo->Attributes.chValue;
+    uint_fast8_t table;
+    uint_fast16_t hwAddress;
 
-    if ((ppu->ppuctrl&PPUCTRL_SPRITE_SIZE)==0) {
-        if ((attributes&0x80)) {
-            row=7-row;
+    if (ppu->ppuctrl & PPUCTRL_SPRITE_SIZE) {
+        if ((chAttributes & 0x80)) {
+            hwRow = 15 - hwRow;
         }
-        address=0x1000*(ppu->ppuctrl&PPUCTRL_SPRITE_TABLE?1:0)+tile*16+row;
-    } else {
-        if ((attributes&0x80)) {
-            row=15-row;
-        }
-        table=tile&0x01;
-        tile&=0xFE;
+        table = tile & 0x01;
+        tile &= 0xFE;
         
-        if (row>7) {
+        if (hwRow > 7) {
             tile++;
-            row-=8;
+            hwRow -= 8;
         }
-        address = 0x1000*(table)+tile*16+row;
+    } else {
+        if ((chAttributes & 0x80)) {
+            hwRow = 7 - hwRow;
+        }
+        table = (ppu->ppuctrl & PPUCTRL_SPRITE_TABLE ? 1 : 0 ) ;
     }
     
-    int low_tile_byte=ppu->read(ppu->nes, address);
-    int high_tile_byte=ppu->read(ppu->nes, address+8);
+    hwAddress = 0x1000 * table + tile * 16 + hwRow;
+    
+    uint_fast8_t low_tile_byte = ppu->read(ppu->nes, hwAddress);
+    uint_fast8_t high_tile_byte = ppu->read(ppu->nes, hwAddress + 8);
     uint32_t data=0;
   
-    int p1, p2;
-    if (attributes&0x40) {
-        for (int j=0; j<8; j++) {
-            p1=(low_tile_byte&0x01);
-            p2=(high_tile_byte&0x01)<<1;
-            low_tile_byte>>=1;
-            high_tile_byte>>=1;
+    uint_fast8_t p1, p2;
+    if (chAttributes & 0x40) {
+        uint_fast8_t n = 8;
+        do {
+            p1= (low_tile_byte & 0x01);
+            p2= (high_tile_byte & 0x01) << 1;
+            low_tile_byte >>= 1;
+            high_tile_byte >>= 1;
             
-            data<<=4;
-            data|=((attributes&3)<<2)|p1|p2;
-        }
+            data <<= 4;
+            data |= ((chAttributes & 3) << 2) | p1 | p2;
+        } while(--n);
     } else {
-        for (int j=0; j<8; j++) {
-            p1=(low_tile_byte&0x80)>>7;
-            p2=(high_tile_byte&0x80)>>6;
-            low_tile_byte<<=1;
-            high_tile_byte<<=1;
+        uint_fast8_t n = 8;
+        do {
+            p1 = (low_tile_byte & 0x80) >> 7;
+            p2 = (high_tile_byte & 0x80) >> 6;
+            low_tile_byte <<= 1;
+            high_tile_byte <<= 1;
 
-            data<<=4;
-            data|=((attributes&3)<<2)|p1|p2;
-        }
+            data <<= 4;
+            data |= ((chAttributes & 3) << 2) | p1 | p2;
+        } while(--n);
     }
 
     return data;
@@ -274,7 +333,7 @@ static void sort_sprite_order_list(ppu_t *ptPPU)
     //! initialise the list
     for (;chIndex < 64; chIndex++) {
         ptPPU->SpriteYOrderList.List[chIndex].chIndex = chIndex;
-        ptPPU->SpriteYOrderList.List[chIndex].chY = ptPPU->SpriteInfo[chIndex].chY;
+        ptPPU->SpriteYOrderList.List[chIndex].chY = ptPPU->tSpriteTable.SpriteInfo[chIndex].chY;
     }
     
     //! sort the list
@@ -335,9 +394,9 @@ static inline uint_fast8_t fetch_sprite_info_on_specified_line(ppu_t *ptPPU, uin
         }
         
         if (chCount < JEG_MAX_ALLOWED_SPRITES_ON_SINGLE_SCANLINE) {
-            ptPPU->sprite_patterns[chCount]   = fetch_sprite_pattern(ptPPU, chIndex, row);
-            ptPPU->sprite_positions[chCount]  = ptPPU->SpriteInfo[chIndex].chPosition; 
-            ptPPU->sprite_priorities[chCount] = ptPPU->SpriteInfo[chIndex].Attributes.Priority;
+            ptPPU->sprite_patterns[chCount]   = fetch_sprite_pattern(ptPPU, ptPPU->tSpriteTable.SpriteInfo + chIndex, row);
+            ptPPU->sprite_positions[chCount]  = ptPPU->tSpriteTable.SpriteInfo[chIndex].chPosition; 
+            ptPPU->sprite_priorities[chCount] = ptPPU->tSpriteTable.SpriteInfo[chIndex].Attributes.Priority;
             ptPPU->sprite_indicies[chCount]   = chIndex;
             chCount++;
         } else {
@@ -347,15 +406,15 @@ static inline uint_fast8_t fetch_sprite_info_on_specified_line(ppu_t *ptPPU, uin
 #else
     // evaluate sprite
     for(int_fast32_t j = 0; j < 64; j++) {
-        int_fast32_t row = ptPPU->scanline-ptPPU->SpriteInfo[j].chY;
+        int_fast32_t row = ptPPU->scanline-ptPPU->tSpriteTable.SpriteInfo[j].chY;
         if (    (row < 0)
             ||  (row >= chSpriteSize)) {
             continue;
         }
         if (chCount < JEG_MAX_ALLOWED_SPRITES_ON_SINGLE_SCANLINE) {
-            ptPPU->sprite_patterns[chCount]   = fetch_sprite_pattern(ptPPU, j, row);
-            ptPPU->sprite_positions[chCount]  = ptPPU->SpriteInfo[j].chPosition;
-            ptPPU->sprite_priorities[chCount] = ptPPU->SpriteInfo[j].Attributes.Priority;
+            ptPPU->sprite_patterns[chCount]   = fetch_sprite_pattern(ptPPU, ptPPU->tSpriteTable.SpriteInfo + j, row);
+            ptPPU->sprite_positions[chCount]  = ptPPU->tSpriteTable.SpriteInfo[j].chPosition;
+            ptPPU->sprite_priorities[chCount] = ptPPU->tSpriteTable.SpriteInfo[j].Attributes.Priority;
             ptPPU->sprite_indicies[chCount]   = j;
             chCount++;
         }
@@ -368,6 +427,146 @@ static inline uint_fast8_t fetch_sprite_info_on_specified_line(ppu_t *ptPPU, uin
     return chCount;
 }
 
+static void fetch_background_tile_info(ppu_t *ptPPU)
+{
+    uint_fast32_t data = 0;
+    ptPPU->tile_data <<= 4;
+    
+    uint_fast8_t chTableIndex = find_name_attribute_table_index(
+                                        ptPPU->nes->cartridge.chMirror, 
+                                        ptPPU->v & 0x0FFF);
+    name_attribute_table_t *ptTable = &(ptPPU->tNameAttributeTable[chTableIndex]);
+    
+    uint_fast16_t hwAddress = ptPPU->v & 0x3FF;
+    
+    switch (ptPPU->cycle & 0x07) {
+        case 1:                                                     //!< fetch name table byte
+            ptPPU->name_table_byte 
+                = ptTable->chBuffer[hwAddress];                     //!< ptPPU->read(ptPPU->nes, 0x2000 | (ptPPU->v&0x0FFF) );
+            break;
+            
+        case 3:                                                     //!< fetch attribute table byte
+            ptPPU->attribute_table_byte = ptTable->AttributeTable[ptPPU->tVAddress.YScroll>>2][ptPPU->tVAddress.XScroll>>2].chValue;
+            ptPPU->attribute_table_byte = 
+                  (   (   ptPPU->attribute_table_byte >> (    ( (ptPPU->v>>4) & 4) 
+                                                          |   (  ptPPU->v&2)) 
+                      ) & 3 
+                  ) << 2;
+            break;
+            
+        case 5:                                                     //!< fetch low tile byte
+            ptPPU->low_tile_byte = ptPPU->read ( 
+                        ptPPU->nes,    
+                        0x1000*((ptPPU->ppuctrl & PPUCTRL_BACKGROUND_TABLE) ? 1 : 0)
+                    +   ptPPU->name_table_byte*16
+                    +   ptPPU->tVAddress.TileYOffsite
+                );
+            break;
+            
+        case 7:                                                     //!< fetch high tile byte
+            ptPPU->high_tile_byte = ptPPU->read(
+                        ptPPU->nes, 
+                        0x1000 * ((ptPPU->ppuctrl & PPUCTRL_BACKGROUND_TABLE) ? 1 : 0)
+                    +   ptPPU->name_table_byte*16
+                    +   ptPPU->tVAddress.TileYOffsite + 8
+                );
+            break;
+            
+        case 0:                                                     //!< store tile data
+            for(int_fast32_t j = 0; j<8; j++) {
+                data <<= 4;
+                data |=     ptPPU->attribute_table_byte
+                        |   ((ptPPU->low_tile_byte  & 0x80) >> 7)
+                        |   ((ptPPU->high_tile_byte & 0x80) >> 6);
+                        
+                ptPPU->low_tile_byte <<= 1;
+                ptPPU->high_tile_byte <<= 1;
+            }
+            ptPPU->tile_data |= data;
+            break;
+    }
+    
+
+
+}
+
+static void ppu_mix_background_and_foreground(ppu_t *ptPPU)
+{
+    //! render pixel
+    uint_fast8_t background = 0, i = 0, sprite = 0;
+
+    //! get sprite pixel color
+    if (ptPPU->ppumask & PPUMASK_SHOW_SPRITES) {
+    
+        for(uint_fast8_t j = 0; j < ptPPU->sprite_count; j++) {
+            int_fast16_t offset =   (ptPPU->cycle - 1) 
+                                  - (int_fast16_t)ptPPU->sprite_positions[j];
+                                  
+            if ( offset < 0 || offset > 7) {
+                continue;
+            }
+            
+            int_fast32_t color = (ptPPU->sprite_patterns[j] >> ((7 - offset) * 4)) & 0x0F;
+            if (!(color & 0x03)) {
+                continue;
+            }
+            
+            i = j;
+            sprite = color;
+            break;
+        }
+    }
+    
+    uint_fast8_t s = (sprite & 0x03), color = 0;
+
+    //! get background pixel color
+    if ((ptPPU->ppumask&PPUMASK_SHOW_BACKGROUND) != 0) {
+        background = (ptPPU->tile_data >> (32 + ((7-ptPPU->x) * 4)) ) & 0x0F;
+    }
+
+    if ((ptPPU->cycle - 1) < 8) {
+        if ((ptPPU->ppumask & PPUMASK_SHOW_LEFT_BACKGROUND) == 0) {
+            background = 0;
+        }
+        if ((ptPPU->ppumask & PPUMASK_SHOW_LEFT_SPRITES) == 0) {
+            sprite = 0;
+        }
+    }
+
+    uint_fast8_t b = (background & 0x03);
+    
+    if (!b && s) {
+        color = sprite | 0x10;
+    } else if (b && !s) {
+        color = background;
+    } else if (b && s) {
+        if (    (ptPPU->sprite_indicies[i] == 0) 
+            &&  ((ptPPU->cycle - 1) < 255)) {
+            ptPPU->ppustatus |= PPUSTATUS_SPRITE_ZERO_HIT;
+        }
+    
+        if (ptPPU->sprite_priorities[i] == 0) {
+            color = sprite | 0x10;
+        } else {
+            color = background;
+        }
+    }
+    
+    if ( color >= 16 && !(color & 0x03)) {
+        color -= 16;
+    }
+#if JEG_USE_EXTERNAL_DRAW_PIXEL_INTERFACE == ENABLED
+    ptPPU->fnDrawPixel(   ptPPU->ptTag, 
+                        ptPPU->scanline,                              //!< Y
+                        ptPPU->cycle-1,                               //!< X
+                        ptPPU->palette[color]);                       //!< 8bit color
+#else
+    ptPPU->video_frame_data[ptPPU->scanline * 256 + ptPPU->cycle - 1] 
+            = ptPPU->palette[color];
+#endif
+}
+
+
 #define RENDERING_ENABLED       (ppu->ppumask & (   PPUMASK_SHOW_BACKGROUND     \
                                                 |   PPUMASK_SHOW_SPRITES))
 #define PRE_LINE                (261 == ppu->scanline)
@@ -377,10 +576,9 @@ static inline uint_fast8_t fetch_sprite_info_on_specified_line(ppu_t *ptPPU, uin
 #define VISIBLE_CYCLE           (ppu->cycle >= 1 && ppu->cycle <= 256)
 #define FETCH_CYCLE             (PRE_FETCH_CYCLE || VISIBLE_CYCLE)
 
-int_fast32_t ppu_update(ppu_t *ppu) 
+uint_fast32_t ppu_update(ppu_t *ppu) 
 {
     //! tick
-    //! TODO: every second frame is shorter
     int_fast32_t cycles = (ppu->nes->cpu.cycle_number - ppu->last_cycle_number) * 3;
     ppu->last_cycle_number = ppu->nes->cpu.cycle_number;
 
@@ -402,133 +600,13 @@ int_fast32_t ppu_update(ppu_t *ppu)
         
             //! background logic
             if (VISIBLE_LINE && VISIBLE_CYCLE) {
-                //! render pixel
-                int_fast32_t background = 0, i = 0, sprite = 0;
-
-                //! get background pixel color
-                if ((ppu->ppumask&PPUMASK_SHOW_BACKGROUND) != 0) {
-                    background = ((ppu->tile_data >> 32) >> ((7-ppu->x) * 4)) & 0x0F;
-                }
-
-                //! get sprite pixel color
-                if ((ppu->ppumask&PPUMASK_SHOW_SPRITES)!=0) {
-                
-                    for(int_fast32_t j = 0; j < ppu->sprite_count; j++) {
-                        int_fast32_t offset =   (ppu->cycle - 1) 
-                                              - (int_fast32_t)ppu->sprite_positions[j];
-                                              
-                        if ( offset < 0 || offset > 7) {
-                            continue;
-                        }
-                        
-                        int_fast32_t color = (ppu->sprite_patterns[j] >> ((7 - offset) * 4)) & 0x0F;
-                        if (color % 4 == 0) {
-                            continue;
-                        }
-                        
-                        i=j;
-                        sprite = color;
-                        break;
-                    }
-                }
-
-                if ((ppu->cycle - 1) < 8) {
-                    if ((ppu->ppumask & PPUMASK_SHOW_LEFT_BACKGROUND) == 0) {
-                        background=0;
-                    }
-                    if ((ppu->ppumask & PPUMASK_SHOW_LEFT_SPRITES) == 0) {
-                        sprite=0;
-                    }
-                }
-
-                int_fast32_t b = (background % 4 !=0 ), s = (sprite % 4 !=0 ), color = 0;
-                
-                if (!b && s) {
-                    color = sprite | 0x10;
-                } else if (b && !s) {
-                    color = background;
-                } else if (b && s) {
-                    if (    (ppu->sprite_indicies[i] == 0) 
-                        &&  ((ppu->cycle - 1) < 255)) {
-                        ppu->ppustatus|=PPUSTATUS_SPRITE_ZERO_HIT;
-                    }
-                
-                    if (ppu->sprite_priorities[i] == 0) {
-                        color=sprite|0x10;
-                    } else {
-                        color=background;
-                    }
-                }
-                
-                if ( color >= 16 && color % 4 == 0 ) {
-                    color -= 16;
-                }
-            #if JEG_USE_EXTERNAL_DRAW_PIXEL_INTERFACE == ENABLED
-                ppu->fnDrawPixel(   ppu->ptTag, 
-                                    ppu->scanline,                              //!< Y
-                                    ppu->cycle-1,                               //!< X
-                                    ppu->palette[color]);                       //!< 8bit color
-            #else
-                ppu->video_frame_data[ppu->scanline * 256 + ppu->cycle - 1] 
-                        = ppu->palette[color];
-            #endif
-            }
-
-            if (RENDER_LINE && FETCH_CYCLE) {
-                uint_fast32_t data = 0;
-                ppu->tile_data <<= 4;
-                switch (ppu->cycle & 0x07) {
-                    case 1:                                                     //!< fetch name table byte
-                        ppu->name_table_byte 
-                            = ppu->read(ppu->nes, 0x2000 | (ppu->v&0x0FFF) );
-                        break;
-                        
-                    case 3:                                                     //!< fetch attribute table byte
-                        ppu->attribute_table_byte
-                            = (   (   ppu->read( ppu->nes,  (   0x23C0
-                                                            |   ( ppu->v & 0xC00)
-                                                            |   ((ppu->v >> 4) & 0x38)
-                                                            |   ((ppu->v >> 2) & 0x07))
-                                                            
-                                               ) >> (   ( (ppu->v>>4) & 4) 
-                                                    |   (  ppu->v&2)) 
-                                  ) & 3 
-                              ) << 2;
-                        break;
-                        
-                    case 5:                                                     //!< fetch low tile byte
-                        ppu->low_tile_byte = ppu->read ( 
-                                    ppu->nes,    
-                                    0x1000*((ppu->ppuctrl & PPUCTRL_BACKGROUND_TABLE) ? 1 : 0)
-                                +   ppu->name_table_byte*16
-                                +   ppu->tVAddress.TileYOffsite
-                            );
-                        break;
-                        
-                    case 7:                                                     //!< fetch high tile byte
-                        ppu->high_tile_byte = ppu->read(
-                                    ppu->nes, 
-                                    0x1000 * ((ppu->ppuctrl & PPUCTRL_BACKGROUND_TABLE) ? 1 : 0)
-                                +   ppu->name_table_byte*16
-                                +   ppu->tVAddress.TileYOffsite + 8
-                            );
-                        break;
-                        
-                    case 0:                                                     //!< store tile data
-                        for(int_fast32_t j = 0; j<8; j++) {
-                            data <<= 4;
-                            data |=     ppu->attribute_table_byte
-                                    |   ((ppu->low_tile_byte  & 0x80) >> 7)
-                                    |   ((ppu->high_tile_byte & 0x80) >> 6);
-                                    
-                            ppu->low_tile_byte <<= 1;
-                            ppu->high_tile_byte <<= 1;
-                        }
-                        ppu->tile_data |= data;
-                        break;
-                }
+                ppu_mix_background_and_foreground(ppu);
             }
             
+            if (RENDER_LINE && FETCH_CYCLE) {
+                //! fetch background tile information with ppu->v 
+                fetch_background_tile_info(ppu);
+            }
             
             if (   PRE_LINE 
                 && ppu->cycle >= 280 

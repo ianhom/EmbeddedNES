@@ -64,6 +64,13 @@
 #   define NES_ROM_PATH "..\\..\\LiteNES\\ROMS\\Super Mario Bros (E).nes"
 #endif
 
+#ifndef NES_DEFAULT_ROM_NUMBER
+#   define NES_DEFAULT_ROM_NUMBER           1
+#endif
+#define __DEFAULT_ROM(__N)          (uint8_t *)NES_ROM_##__N, NES_ROM_##__N##_Length
+#define __NES_DEFAULT_ROM(__N)      __DEFAULT_ROM(__N)
+#define NES_DEFAULT_ROM             __NES_DEFAULT_ROM(NES_DEFAULT_ROM_NUMBER)
+
 /*============================ MACROFIED FUNCTIONS ===========================*/
 /*============================ TYPES =========================================*/
 /*============================ GLOBAL VARIABLES ==============================*/
@@ -89,9 +96,9 @@ void SysTick_Handler (void)
         
         //STREAM_OUT.Stream.Flush();
     }
-    
+#if DEMO_USE_FILE_IO == ENABLED
     FILE_IO.Dependent.TimerTickService();
-
+#endif
     /*! call application platform 1ms event handler */
     app_platform_1ms_event_handler();
 }
@@ -104,7 +111,7 @@ static void system_init(void)
 
     SysTick_Config(SystemCoreClock  / 1000);  //!< Generate interrupt every 1 ms 
 }
-
+#if DEMO_USE_FILE_IO == ENABLED
 static void file_io_service_init(void)
 {
     NO_INIT static file_io_delay_item_t s_tDelayObjPool[DELAY_OBJ_POOL_SIZE];
@@ -148,10 +155,12 @@ static void file_io_service_init(void)
                     
     );
 }
-
+#endif
 static void app_init(void)
 {   
+#if DEMO_USE_FILE_IO == ENABLED
     file_io_service_init();
+#endif
 }
 
 /*
@@ -179,7 +188,7 @@ For compiler 6
 /*----------------------------------------------------------------------------
   Main function
  *----------------------------------------------------------------------------*/
-
+#if DEMO_USE_FILE_IO == ENABLED
 NO_INIT static uint8_t s_cROMBuffer[NES_ROM_BUFFER_SIZE * 1024];
 
 static int_fast32_t load_nes_rom(uint8_t *pchBuffer, uint32_t wSize)
@@ -223,15 +232,28 @@ static int_fast32_t load_nes_rom(uint8_t *pchBuffer, uint32_t wSize)
     
     return wTotalSize;
 }
+#endif
+//! \name default roms
+//! @{
+extern const uint8_t NES_ROM_1[];               //!< city tank
+extern const uint32_t NES_ROM_1_Length;
+extern const uint8_t NES_ROM_2[];               //!< road fighter
+extern const uint32_t NES_ROM_2_Length;
+extern const uint8_t NES_ROM_3[];               //!< super mario bro
+extern const uint32_t NES_ROM_3_Length;
+extern const uint8_t NES_ROM_4[];               //!< Contra(USA)
+extern const uint32_t NES_ROM_4_Length;
+//! @}
 
 int main (void) 
 {
     system_init();
+#if DEMO_USE_FILE_IO == ENABLED
     app_init();
+#endif
     
-    extern const uint8_t NES_ROM_1[];
-    extern const uint32_t NES_ROM_1_Length;
-    
+
+#if DEMO_USE_FILE_IO == ENABLED
     file_io_stream_t *ptLog = FILE_IO.Channel.Open(
                             "Log",
                             "STDOUT",
@@ -241,9 +263,10 @@ int main (void)
     if (NULL != ptLog) {
         retarget_stdout(ptLog);
     }
-    
+#endif
     do {
         bool bLoadingSuccess = false;
+#if DEMO_USE_FILE_IO == ENABLED
         do {
             if (NULL == ptLog) {
                 break;
@@ -260,10 +283,10 @@ int main (void)
             
             bLoadingSuccess = true;
         } while(false);
-        
+#endif
         if (!bLoadingSuccess) {
             //! use default
-            if (fce_load_rom((uint8_t *)NES_ROM_1, NES_ROM_1_Length) != 0){
+            if (fce_load_rom(NES_DEFAULT_ROM) != 0){
                 break;
             }
         }        
@@ -272,15 +295,16 @@ int main (void)
         fce_init();
         log_info("Game Start...\r\n")
         fce_run();
-        
+#if DEMO_USE_FILE_IO == ENABLED
         FILE_IO.Channel.Close(ptLog);
+#endif
         while(1);
     } while(false);
     
     log_info("Error: Invalid or unsupported rom.\r\n")
-    
+#if DEMO_USE_FILE_IO == ENABLED
     FILE_IO.Channel.Close(ptLog);
-
+#endif
     while (true) {
     }
 

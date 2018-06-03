@@ -20,13 +20,7 @@
 
 
 #include <stdio.h>
-#include "Device.h"                     // Keil::Board Support:V2M-MPS2:Common
-#include "RTE_Components.h"             // Component selection
-#include "Board_LED.h"                  // ::Board Support:LED
-#include "Board_Buttons.h"              // ::Board Support:Buttons
-#include "Board_Touch.h"                // ::Board Support:Touchscreen
-#include "Board_GLCD.h"                 // ::Board Support:Graphic LCD
-#include "GLCD_Config.h"                // Keil.SAM4E-EK::Board Support:Graphic LCD
+#include "bsp.h"                     
 
 #include ".\stdout_USART.h"
 #include ".\file_io.h"
@@ -111,8 +105,11 @@ int32_t stop_counter(void)
  */
 void app_platform_1ms_event_handler(void)
 {
+    bsp_1ms_event_handler();
     counter_overflow();
+#if DEMO_USE_FILE_IO == ENABLED
     STREAM_IN_1ms_event_handler();
+#endif
 }
 
 
@@ -124,18 +121,18 @@ void app_platform_1ms_event_handler(void)
 bool app_platform_init( void )
 {
     do {
-        
+        bsp_init();
         SystemCoreClockUpdate();
 
         LED_Initialize();                       /* Initializ LEDs                 */
         Buttons_Initialize();                   /* Initializ Push Buttons         */
-        
+#if DEMO_USE_FILE_IO == ENABLED
     #ifdef RTE_Compiler_IO_STDOUT_User
         if (!stdout_init()) {
             break;
         }
     #endif
-        
+#endif
         return true;
     } while(false);
     
@@ -151,17 +148,20 @@ bool app_platform_init( void )
 */
 int stdout_putchar (int ch) 
 {
+#if DEMO_USE_FILE_IO == ENABLED
     if (NULL == s_tSTDIO.ptOUT) {
         while(!STREAM_OUT.Stream.WriteByte(ch));
     } else {
         FILE_IO.Channel.WriteByte(s_tSTDIO.ptOUT, ch);
     }
-    
+#endif   
     return ch;
+ 
 }
 
 int stdin_getchar (void)
 {   
+#if DEMO_USE_FILE_IO == ENABLED
     if (NULL == s_tSTDIO.ptIN) {
         uint8_t chByte;
         while(!STREAM_IN.Stream.ReadByte(&chByte));
@@ -169,53 +169,37 @@ int stdin_getchar (void)
     }
     
     return FILE_IO.Channel.ReadByte(s_tSTDIO.ptIN);
+#else
+    return -1;
+#endif
 }
 
 void retarget_stdout(file_io_stream_t *ptOut)
 {
+#if DEMO_USE_FILE_IO == ENABLED
     s_tSTDIO.ptOUT = ptOut;
+#endif
 }
 
 void retarget_stdin(file_io_stream_t *ptIn)
 {
+#if DEMO_USE_FILE_IO == ENABLED
     s_tSTDIO.ptIN = ptIn;
+#endif
 }
 
 void stdout_flush(void)
 {
+#if DEMO_USE_FILE_IO == ENABLED
     if (NULL == s_tSTDIO.ptOUT) {
         while(!STREAM_OUT.Stream.Flush());
     } else {
         FILE_IO.Channel.Flush(s_tSTDIO.ptOUT);
     }
+#endif
 }
   
   
-static volatile bool s_bBlockingStyle = true;
 
-
-void disable_blocking_style(void)
-{
-    SAFE_ATOM_CODE(
-        s_bBlockingStyle = false;
-        //__NVIC_EnableIRQ(SPI_0_1_IRQn);
-    )
-}
-
-void enable_blocking_style(void)
-{
-    SAFE_ATOM_CODE(
-
-        __NVIC_DisableIRQ(SPI_0_1_IRQn);
-        __NVIC_ClearPendingIRQ(SPI_0_1_IRQn);
-    
-        s_bBlockingStyle = true;
-    )
-}
-
-bool is_blocking_style_enabled(void)
-{
-    return s_bBlockingStyle;
-}
   
 /* EOF */
